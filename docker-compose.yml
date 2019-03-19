@@ -5,38 +5,27 @@ services:
     hostname: "rabbit"
     labels:
       NAME: "rabbit"
-    environment:
-      RABBITMQ_DEFAULT_USER: "fc-rabbitmq-user"
-      RABBITMQ_DEFAULT_PASS: "fc-rabbitmq-pass"
-      RABBITMQ_DEFAULT_VHOST: "/"
+    env_file:
+      - ./env/rabbitmq.env
     volumes:
       - ./volumes/rabbitmq:/var/lib/rabbitmq
     ports:
       - "15672:15672"
       - "5672:5672"
-
-  nats:
-    image: nats-streaming:0.12.2-linux
-    ports:
-      - 8222:8222
-      - 4222:4222
-    volumes:
-      - ./volumes/nats:/datastore
-    command: >
-      --addr 0.0.0.0 
-      --port 4222 
-      --http_port 8222 
-      --store=file 
-      --dir=/datastore 
-      --file_compact_enabled=true
-      --file_crc=true
     
   db:
     image: postgres:11.2
     ports:
-      - 5432:5432
-    environment:
-      POSTGRES_USER: "fc-postgres-user"
-      POSTGRES_PASSWORD: "fc-postgres-pass"
+      - "5432:5432"
+    env_file:
+      - ./env/pg.env
     volumes:
       - ./volumes/pg:/var/lib/postgresql/data
+  
+  migration:
+    image: amacneil/dbmate
+    env_file:
+      - ./env/pg.env
+    volumes:
+      - ./migrations:/db/migrations
+    command: up

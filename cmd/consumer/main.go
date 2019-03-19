@@ -42,9 +42,11 @@ func main() {
 	config := Config{}
 
 	flag.IntVar(&config.Parallel, "parallel", runtime.NumCPU()*2, "number of workers")
+
 	flag.StringVar(&config.Queue.Host, "queue-host", "0.0.0.0:5672", "address of queue (Default: 0.0.0.0:5672).")
 	flag.StringVar(&config.Queue.User, "queue-user", "fc-rabbitmq-user", "queue user (Default: fc-rabbitmq-user)")
 	flag.StringVar(&config.Queue.Pass, "queue-pass", "fc-rabbitmq-pass", "queue pass (Default: fc-rabbitmq-pass)")
+
 	flag.StringVar(&config.Queue.Host, "db-host", "0.0.0.0:5432", "address of queue (Default: 0.0.0.0:5672).")
 	flag.StringVar(&config.Queue.User, "db-user", "fc-postgres-user", "queue user (Default: fc-postgres-user)")
 	flag.StringVar(&config.Queue.Pass, "db-pass", "fc-postgres-pass", "queue pass (Default: fc-postgres-pass)")
