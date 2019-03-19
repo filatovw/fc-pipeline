@@ -4,7 +4,7 @@ build-producer:
 
 PHONY:start-producer
 start-producer:
-	./bin/producer -file ./data/data_example.csv -parallel 2 -queue-addr amqp://rabbitmq:rabbitmq@0.0.0.0:5672/
+	./bin/producer -file ./data/data_10000.csv -parallel 10 -queue-addr 0.0.0.0:5672 -queue-user=fcuser -queue-pass=fcpass
 
 
 PHONY:build-consumer
@@ -13,4 +13,4 @@ build-consumer:
 
 PHONY:start-consumer
 start-consumer:
-	./bin/consumer -queue-addr amqp://rabbitmq:rabbitmq@0.0.0.0:5672/
+	./bin/consumer

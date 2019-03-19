@@ -27,9 +27,13 @@ type Config struct {
 }
 
 type Queue struct {
-	Addr string
+	Host string
 	User string
 	Pass string
+}
+
+func (q *Queue) Addr() string {
+	return fmt.Sprintf("amqp://%s:%s@%s/", q.User, q.Pass, q.Host)
 }
 
 var emailPattern = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
@@ -43,14 +47,14 @@ func main() {
 	config := Config{Queue: Queue{}}
 	flag.IntVar(&config.Parallel, "parallel", runtime.NumCPU()*2, "number of workers")
 	flag.StringVar(&config.File, "file", "", "path to CSV file")
-	flag.StringVar(&config.Queue.Addr, "queue-addr", "queue", "address of queue")
+	flag.StringVar(&config.Queue.Host, "queue-addr", "queue", "address of queue")
 	flag.StringVar(&config.Queue.User, "queue-user", "", "queue user")
 	flag.StringVar(&config.Queue.Pass, "queue-pass", "", "queue password")
 	flag.Parse()
 
 	logger := log.New(os.Stdout, "producer", log.Lmicroseconds|log.LstdFlags|log.Llongfile)
 
-	connection, err := amqp.Dial(config.Queue.Addr)
+	connection, err := amqp.Dial(config.Queue.Addr())
 	if err != nil {
 		logger.Fatalf("failed to establish connection to Queue service: %s", err)
 	}
