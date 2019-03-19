@@ -27,5 +27,25 @@ services:
     env_file:
       - ./env/pg.env
     volumes:
-      - ./migrations:/db/migrations
+      - ./consumer/migrations:/db/migrations
     command: up
+
+  producer:
+    image: filatovw/fc-producer:latest
+    build:
+      context: ./
+      dockerfile: ./producer/Dockerfile
+    env_file:
+      - ./env/producer.env
+    volumes:
+      - ./producer/data:/data
+    command: producer -queue-addr queue:5672 -file /data/data_1000.csv
+    
+  consumer:
+    image: filatovw/fc-consumer:latest
+    build:
+      context: ./
+      dockerfile: ./consumer/Dockerfile
+    env_file:
+      - ./env/consumer.env
+    command: consumer -queue-addr queue:5672 -db-host db -db-port 5432

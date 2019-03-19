@@ -4,60 +4,39 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
 
-	"github.com/filatovw/fc-pipeline/queue"
-	"github.com/jmoiron/sqlx"
+	"github.com/filatovw/fc-pipeline/libs/config"
+	"github.com/filatovw/fc-pipeline/libs/queue"
 	_ "github.com/lib/pq"
-
-	"github.com/streadway/amqp"
 )
 
 type Config struct {
 	Parallel int
-	Queue    Queue
-	DB       DB
-}
-
-type DB struct {
-	Host string
-	Port string
-	User string
-	Pass string
-}
-
-type Queue struct {
-	Host string
-	User string
-	Pass string
-}
-
-func (q *Queue) Addr() string {
-	return fmt.Sprintf("amqp://%s:%s@%s/", q.User, q.Pass, q.Host)
+	Queue    config.Queue
+	DB       config.DB
 }
 
 func main() {
 	// read parameters
-	config := Config{DB: DB{}, Queue: Queue{}}
-
+	config := Config{}
 	flag.IntVar(&config.Parallel, "parallel", runtime.NumCPU()*2, "number of workers")
 
-	flag.StringVar(&config.Queue.Host, "queue-host", "0.0.0.0:5672", "address of queue (Default: 0.0.0.0:5672).")
+	flag.StringVar(&config.Queue.Addr, "queue-addr", "0.0.0.0:5672", "address of queue (Default: 0.0.0.0:5672)")
 	flag.StringVar(&config.Queue.User, "queue-user", "fcuser", "queue user (Default: fcuser)")
 	flag.StringVar(&config.Queue.Pass, "queue-pass", "fcpass", "queue pass (Default: fcpass)")
 
 	flag.StringVar(&config.DB.Host, "db-host", "0.0.0.0", "address of queue (Default: 0.0.0.0)")
-	flag.StringVar(&config.DB.Port, "db-port", "5432", "address of queue (Default: 5432)")
+	flag.IntVar(&config.DB.Port, "db-port", 5432, "address of queue (Default: 5432)")
 	flag.StringVar(&config.DB.User, "db-user", "fcuser", "queue user (Default: fcuser)")
 	flag.StringVar(&config.DB.Pass, "db-pass", "fcpass", "queue pass (Default: fcpass)")
 	flag.Parse()
 
-	logger := log.New(os.Stdout, "consumer", log.Lmicroseconds|log.LstdFlags|log.Llongfile)
+	logger := log.New(os.Stdout, "consumer", log.Lmicroseconds|log.LstdFlags|log.Lshortfile)
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -72,38 +51,21 @@ func main() {
 		cancel()
 	}()
 
-	log.Printf("%#v", config)
-
-	connstring := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		config.DB.Host, config.DB.Port, config.DB.User, config.DB.Pass, "userdata")
-	log.Printf("%s", connstring)
-	db, err := sqlx.Connect("postgres", connstring)
+	storage, err := newStorage(config.DB)
 	if err != nil {
-		log.Fatal(err)
-	}
-	err = db.Ping()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	connection, err := amqp.Dial(config.Queue.Addr())
-	if err != nil {
-		logger.Fatalf("failed to establish connection to Queue service: %s", err)
-	}
-	defer connection.Close()
-	ch, err := connection.Channel()
-	if err != nil {
-		logger.Printf("failed to create channel: %s", err)
+		log.Print(err)
 		return
 	}
+	defer storage.Close()
 
-	q, err := queue.Declare(ch, "csv2db")
+	qch, q, err := queue.Connect(config.Queue)
 	if err != nil {
-		logger.Printf("failed to declare queue: %s", err)
+		log.Print(err)
 		return
 	}
+	defer qch.Close()
 
-	msgs, err := ch.Consume(q.Name, "", false, false, false, false, nil)
+	msgs, err := qch.Consume(q.Name, "", false, false, false, false, nil)
 	if err != nil {
 		logger.Printf("failed to bind to queue: %s", err)
 	}
@@ -120,7 +82,7 @@ func main() {
 				log.Printf("message decode: %s", err)
 				continue
 			}
-			if _, err := db.ExecContext(ctx, db.Rebind(`INSERT INTO contacts (name, email) VALUES (?, ?);`), msg.Name, msg.Email); err != nil {
+			if err := storage.Insert(ctx, msg); err != nil {
 				log.Printf("insert item %v, error: %s", msg, err)
 				if err := m.Reject(false); err != nil {
 					log.Printf("message reject: %s", err)

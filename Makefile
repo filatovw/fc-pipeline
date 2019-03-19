@@ -1,16 +1,44 @@
-PHONY:build-producer
-build-producer:
-	go build -o ./bin/producer ./cmd/producer/...
+DC = docker-compose
+PHONY:prune
+prune:
+	docker system prune -f --volumes
 
-PHONY:start-producer
-start-producer:
-	./bin/producer -file ./data/data_10000.csv -parallel 10 -queue-addr 0.0.0.0:5672 -queue-user=fcuser -queue-pass=fcpass
+PHONY:migrate
+migrate:
+	$(DC) up migration
 
+PHONY:infra
+infra:
+	$(DC) stop queue db 
+	$(DC) rm -f queue db 
+	$(DC) up -d queue db 
 
-PHONY:build-consumer
-build-consumer:
-	go build -o ./bin/consumer ./cmd/consumer/...
+PHONY:restart
+restart:
+	$(DC) stop queue db 
+	$(DC) rm -f queue db 
+	$(DC) up -d queue db 
 
-PHONY:start-consumer
-start-consumer:
-	./bin/consumer
+PHONY:logs
+logs:
+	$(DC) logs -f producer consumer
+
+PHONY:stop
+stop:
+	$(DC) stop
+
+PHONY: test
+test:
+	go test -v -race ./...
+
+PHONY:check
+check:
+	golangci-lint run ./...
+
+PHONY:build
+build:
+	$(DC) build producer consumer
+
+PHONY:push
+push:
+	$(DC) push producer consumer

@@ -25,7 +25,10 @@ There could be any other database providing UNIQUE index.
 
 TODO:
 
-[ ] Add PG driver
+[x] Add PG driver
 [x] DB migration tool
 [ ] move code from `/cmd` folder to separate folders
 [ ] configure apps from environment variables for passing credentials
+[ ] refactor code
+[ ] add tests
+[ ] k8s deployment
