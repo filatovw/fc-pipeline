@@ -3,40 +3,28 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"log"
 	"os"
 	"os/signal"
-	"runtime"
+	"sync"
 	"syscall"
 
-	"github.com/filatovw/fc-pipeline/libs/config"
+	"github.com/streadway/amqp"
+
 	"github.com/filatovw/fc-pipeline/libs/queue"
-	_ "github.com/lib/pq"
 )
 
-type Config struct {
-	Parallel int
-	Queue    config.Queue
-	DB       config.DB
-}
-
 func main() {
-	// read parameters
-	config := Config{}
-	flag.IntVar(&config.Parallel, "parallel", runtime.NumCPU()*2, "number of workers")
+	config, err := LoadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	flag.StringVar(&config.Queue.Addr, "queue-addr", "0.0.0.0:5672", "address of queue (Default: 0.0.0.0:5672)")
-	flag.StringVar(&config.Queue.User, "queue-user", "fcuser", "queue user (Default: fcuser)")
-	flag.StringVar(&config.Queue.Pass, "queue-pass", "fcpass", "queue pass (Default: fcpass)")
-
-	flag.StringVar(&config.DB.Host, "db-host", "0.0.0.0", "address of queue (Default: 0.0.0.0)")
-	flag.IntVar(&config.DB.Port, "db-port", 5432, "address of queue (Default: 5432)")
-	flag.StringVar(&config.DB.User, "db-user", "fcuser", "queue user (Default: fcuser)")
-	flag.StringVar(&config.DB.Pass, "db-pass", "fcpass", "queue pass (Default: fcpass)")
-	flag.Parse()
-
-	logger := log.New(os.Stdout, "consumer", log.Lmicroseconds|log.LstdFlags|log.Lshortfile)
+	stdlog := log.New(os.Stdout, "consumer", log.Lmicroseconds|log.LstdFlags|log.Lshortfile)
+	stdlog.Printf("started")
+	defer func() {
+		stdlog.Printf("stopped")
+	}()
 
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
@@ -47,28 +35,47 @@ func main() {
 
 	go func() {
 		s := <-sigs
-		log.Printf("stopped with signal: %s", s)
+		stdlog.Printf("stopped with signal: %s", s)
 		cancel()
 	}()
 
+	// connect to storage
 	storage, err := newStorage(config.DB)
 	if err != nil {
-		log.Print(err)
+		stdlog.Print(err)
 		return
 	}
 	defer storage.Close()
 
+	// connect to queue
 	qch, q, err := queue.Connect(config.Queue)
 	if err != nil {
-		log.Print(err)
+		stdlog.Print(err)
 		return
 	}
 	defer qch.Close()
 
+	// get consumer channel
 	msgs, err := qch.Consume(q.Name, "", false, false, false, false, nil)
 	if err != nil {
-		logger.Printf("failed to bind to queue: %s", err)
+		stdlog.Printf("failed to bind to queue: %s", err)
+		return
 	}
+	wg := &sync.WaitGroup{}
+	// start goroutines pool
+	for i := config.Parallel; i > 0; i-- {
+		wg.Add(1)
+		go worker(ctx, i, wg, stdlog, storage, msgs)
+	}
+	wg.Wait()
+}
+
+// worker read message from queue and save it to database. If queue is not reachable - stop worker.
+func worker(ctx context.Context, id int, wg *sync.WaitGroup, stdlog *log.Logger, storage *storage, msgs <-chan amqp.Delivery) {
+	defer func() {
+		wg.Done()
+	}()
+	var msg queue.Message
 	for {
 		select {
 		case <-ctx.Done():
@@ -77,21 +84,27 @@ func main() {
 			if !ok {
 				return
 			}
-			msg := queue.Message{}
 			if err := json.Unmarshal(m.Body, &msg); err != nil {
-				log.Printf("message decode: %s", err)
+				stdlog.Printf("message decode: %s", err)
+				if err := m.Reject(false); err != nil {
+					stdlog.Printf("message reject: %s", err)
+					return
+				}
 				continue
 			}
 			if err := storage.Insert(ctx, msg); err != nil {
-				log.Printf("insert item %v, error: %s", msg, err)
+				stdlog.Printf("insert item: %s", err)
 				if err := m.Reject(false); err != nil {
-					log.Printf("message reject: %s", err)
+					stdlog.Printf("message reject: %s", err)
+					return
 				}
 				continue
 			}
 			if err := m.Ack(false); err != nil {
-				log.Printf("message ack: %s", err)
+				stdlog.Printf("message ack: %s", err)
+				return
 			}
+			stdlog.Printf("message processed: %#v", msg)
 		}
 	}
 }

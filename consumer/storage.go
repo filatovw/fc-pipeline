@@ -6,6 +6,7 @@ import (
 	"github.com/filatovw/fc-pipeline/libs/config"
 	"github.com/filatovw/fc-pipeline/libs/queue"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
 )
 
@@ -39,7 +40,7 @@ func newStorage(cfg config.DB) (*storage, error) {
 
 func (s *storage) Insert(ctx context.Context, msg queue.Message) error {
 	if _, err := s.query.ExecContext(ctx, msg.Name, msg.Email); err != nil {
-		return errors.Wrapf(err, "insert message")
+		return errors.Wrapf(err, "insert message: %#v", msg)
 	}
 	return nil
 }
