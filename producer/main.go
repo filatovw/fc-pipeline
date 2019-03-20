@@ -110,6 +110,7 @@ func worker(ctx context.Context, id int, wg *sync.WaitGroup, stdlog *log.Logger,
 			body, err := json.Marshal(msg)
 			if err != nil {
 				stdlog.Printf("error: json encode: %s", err)
+				continue
 			}
 			if err := qch.Publish("", q.Name, false, false, amqp.Publishing{
 				DeliveryMode: amqp.Persistent,
