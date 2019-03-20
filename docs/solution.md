@@ -147,13 +147,21 @@ Consumer:
 # Repository structure
 
 `/bin` - compiled binaries
+
 `/consumer` - consumer service. All code is here including `Dockerfile`
+
 `/consumer/migrations` - sql migrations
+
 `/docs` - documentation for this solution
+
 `/env` - environment files. There is only one environment, but in reality they should be stored somewhere else separated by environment (dev,test, stage, prod, etc)
+
 `/libs` - common code. I prefer not to rely on 3d-party tools too much and use included batteries whereas possible
+
 `/producer` - procuder service. All code is here including `Dockerfile`
+
 `/producer/data` - csv files. I added randomly generated files with 1000 and 10000 records
+
 `/volumes` - place for queue and database data
 
 
