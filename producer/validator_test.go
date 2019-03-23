@@ -18,6 +18,10 @@ func TestValidateEmail(t *testing.T) {
 			err:   false,
 		},
 		{
+			input: "lala@com",
+			err:   false,
+		},
+		{
 			input: "123456789@493403.ww",
 			err:   false,
 		},
@@ -34,6 +38,10 @@ func TestValidateEmail(t *testing.T) {
 			err:   false,
 		},
 		{
+			input: "email+to.m-.-e@mail-me.run",
+			err:   false,
+		},
+		{
 			input: "",
 			err:   true,
 		},
@@ -43,6 +51,10 @@ func TestValidateEmail(t *testing.T) {
 		},
 		{
 			input: "@dd",
+			err:   true,
+		},
+		{
+			input: "@dd.com",
 			err:   true,
 		},
 		{
